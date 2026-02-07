@@ -3,7 +3,6 @@ from tkinter import ttk, messagebox, simpledialog
 import sqlite3
 from datetime import datetime
 import os
-from PIL import Image, ImageTk
 
 # --- DATABASE LAYER ---
 class DatabaseManager:
@@ -26,7 +25,8 @@ class DatabaseManager:
             self.log_transaction(barcode, "REGISTER", qty, "Initial Stock")
             self.conn.commit()
             return True
-        except sqlite3.IntegrityError: return False
+        except sqlite3.IntegrityError: 
+            return False
 
     def update_quantity(self, barcode, adjust, reason):
         self.cursor.execute("SELECT quantity FROM items WHERE barcode=?", (barcode,))
@@ -97,26 +97,43 @@ class InventoryApp:
     def setup_view_tab(self):
         top = tk.Frame(self.tab_view)
         top.pack(fill="x", padx=10, pady=10)
+        
+        # Search Box
+        tk.Label(top, text="🔍 Search:").pack(side="left", padx=2)
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *a: self.refresh_table())
-        tk.Entry(top, textvariable=self.search_var, width=20).pack(side="left")
+        tk.Entry(top, textvariable=self.search_var, width=15).pack(side="left", padx=5)
         
-        # BUTTONS
-        ttk.Button(top, text="🔄 REFRESH", command=self.refresh_table).pack(side="left", padx=5)
+        # --- NEW: QUICK ADJUST PANEL ---
+        adj_group = tk.LabelFrame(top, text=" Quick Stock Adjust ", padx=10, pady=5)
+        adj_group.pack(side="left", padx=20)
+        
+        ttk.Button(adj_group, text="➖", width=4, command=lambda: self.quick_adjust(-1)).pack(side="left", padx=2)
+        ttk.Button(adj_group, text="➕", width=4, command=lambda: self.quick_adjust(1)).pack(side="left", padx=2)
+        ttk.Button(adj_group, text="Custom +/-", command=self.custom_adjust).pack(side="left", padx=5)
+
+        # Action Buttons
+        ttk.Button(top, text="🔄 REFRESH", command=self.refresh_table).pack(side="right", padx=5)
         ttk.Button(top, text="DELETE SELECTED", command=self.delete_selected).pack(side="right")
 
         cols = ("barcode", "name", "category", "qty", "date")
         self.tree = ttk.Treeview(self.tab_view, columns=cols, show="headings")
-        for c in cols: self.tree.heading(c, text=c.upper())
+        for c in cols: 
+            self.tree.heading(c, text=c.upper())
+            self.tree.column(c, width=100)
+            
         self.tree.tag_configure('low', background='#ffcccc')
         self.tree.pack(expand=True, fill="both", padx=10)
 
     def setup_hist_tab(self):
         cols = ("id", "barcode", "action", "change", "time", "reason")
         self.hist_tree = ttk.Treeview(self.tab_hist, columns=cols, show="headings")
-        for c in cols: self.hist_tree.heading(c, text=c.upper())
+        for c in cols: 
+            self.hist_tree.heading(c, text=c.upper())
         self.hist_tree.pack(expand=True, fill="both", padx=10, pady=10)
         ttk.Button(self.tab_hist, text="REFRESH HISTORY", command=self.refresh_history).pack(pady=5)
+
+    # --- LOGIC METHODS ---
 
     def handle_scan(self, event):
         barcode = self.barcode_entry.get().strip()
@@ -128,9 +145,9 @@ class InventoryApp:
 
         if res:
             name, qty = res
-            adj = simpledialog.askinteger("Update", f"{name} (Stock: {qty})\nAdjustment (+/-):", initialvalue=-1)
+            adj = simpledialog.askinteger("Update", f"{name} (Current Stock: {qty})\nAdjustment (+/-):", initialvalue=-1)
             if adj is not None:
-                reason = simpledialog.askstring("Reason", "Note:", initialvalue="Checkout")
+                reason = simpledialog.askstring("Reason", "Note:", initialvalue="Scanner Adjustment")
                 self.db.update_quantity(barcode, adj, reason or "Manual")
         else:
             self.prompt_new(barcode)
@@ -138,17 +155,63 @@ class InventoryApp:
         self.refresh_table()
         self.barcode_entry.focus_set()
 
+    def quick_adjust(self, amount):
+        """Adjusts selected row by amount without a popup dialog."""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("Selection", "Please select an item in the list first.")
+            return
+        
+        item_vals = self.tree.item(selection[0])['values']
+        barcode = str(item_vals[0])
+        reason = "Quick Add" if amount > 0 else "Quick Remove"
+        
+        self.db.update_quantity(barcode, amount, reason)
+        self.refresh_table()
+
+    def custom_adjust(self):
+        """Triggered from the Manage tab to allow a typed number for selected item."""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("Selection", "Please select an item in the list first.")
+            return
+            
+        item_vals = self.tree.item(selection[0])['values']
+        barcode = str(item_vals[0])
+        name = item_vals[1]
+        
+        adj = simpledialog.askinteger("Bulk Adjust", f"Adjust stock for: {name}\nEnter positive or negative number:")
+        if adj is not None:
+            reason = simpledialog.askstring("Reason", "Note:", initialvalue="Manual Adjustment")
+            self.db.update_quantity(barcode, adj, reason or "Manual")
+            self.refresh_table()
+
     def prompt_new(self, barcode):
         d = tk.Toplevel(self.root)
-        d.title("New Item")
-        tk.Label(d, text=f"ID: {barcode}").pack(pady=5)
-        name_e = tk.Entry(d); name_e.pack()
-        cat_c = ttk.Combobox(d, values=["Sensors", "Boards", "Cables", "Tools"]); cat_c.set("Sensors"); cat_c.pack()
+        d.title("Register New Item")
+        d.geometry("300x250")
+        tk.Label(d, text=f"New Barcode Detected: {barcode}", fg="blue").pack(pady=10)
+        
+        tk.Label(d, text="Item Name:").pack()
+        name_e = tk.Entry(d); name_e.pack(pady=2)
+        
+        tk.Label(d, text="Category:").pack()
+        cat_c = ttk.Combobox(d, values=["Sensors", "Boards", "Cables", "Tools", "Mechanical"]); 
+        cat_c.set("Sensors"); cat_c.pack(pady=2)
+        
+        tk.Label(d, text="Initial Quantity:").pack()
+        qty_e = tk.Entry(d); qty_e.insert(0, "1"); qty_e.pack(pady=2)
+
         def save():
-            self.db.add_item(barcode, name_e.get(), cat_c.get(), 1)
-            d.destroy()
-            self.refresh_table()
-        tk.Button(d, text="SAVE", command=save).pack(pady=10)
+            try:
+                q = int(qty_e.get())
+                self.db.add_item(barcode, name_e.get(), cat_c.get(), q)
+                d.destroy()
+                self.refresh_table()
+            except ValueError:
+                messagebox.showerror("Error", "Quantity must be a number.")
+                
+        tk.Button(d, text="✅ SAVE ITEM", command=save, bg="#55efc4").pack(pady=15)
 
     def delete_selected(self):
         selection = self.tree.selection()
@@ -159,7 +222,7 @@ class InventoryApp:
         item_vals = self.tree.item(selection[0])['values']
         barcode = str(item_vals[0])
         
-        if messagebox.askyesno("Delete", f"Delete {item_vals[1]}?"):
+        if messagebox.askyesno("Delete", f"Are you sure you want to permanently delete {item_vals[1]}?\nThis removes all records of this barcode."):
             self.db.delete_item(barcode)
             self.refresh_table()
 
@@ -171,17 +234,19 @@ class InventoryApp:
     def refresh_table(self):
         for i in self.tree.get_children(): self.tree.delete(i)
         for r in self.db.fetch_all(self.search_var.get()):
+            # Low stock warning if quantity < 2
             tag = ('low',) if r[3] < 2 else ()
             self.tree.insert("", tk.END, values=r, tags=tag)
         
-        # Stats
+        # Update Footer Stats
         self.db.cursor.execute("SELECT COUNT(*), SUM(quantity) FROM items")
         s = self.db.cursor.fetchone()
-        self.stats_label.config(text=f" Items: {s[0]} | Units: {s[1] or 0}")
+        self.stats_label.config(text=f"  Inventory Summary | Unique Items: {s[0]} | Total Units in Stock: {s[1] or 0}")
         self.refresh_history()
 
 if __name__ == "__main__":
     root = tk.Tk()
     app = InventoryApp(root)
+    # Ensure scanning focus
     root.bind("<Button-1>", lambda e: app.barcode_entry.focus_set())
     root.mainloop()
