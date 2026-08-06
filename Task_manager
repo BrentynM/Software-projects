@@ -1,0 +1,117 @@
+import csv
+
+def load_tasks(filename="tasks.csv"):
+    loaded_tasks = []
+    try:
+        with open(filename, mode="r", newline="", encoding="utf-8") as file:
+            reader = csv.reader(file)
+            next(reader, None)  # skip header row
+
+            for row in reader:
+                if row:
+                    task_name = row[0]
+                    completed = row[1].lower() == "yes" if len(row) > 1 else False
+                    loaded_tasks.append({"task": task_name, "completed": completed})
+        print("Tasks loaded successfully!")
+    except FileNotFoundError:
+        print("No previous file exists, starting from scratch")
+    return loaded_tasks
+
+
+def add_task(tasks):
+    new_task = input("Add a new Task: ")
+    tasks.append({"task": new_task, "completed": False})
+    print(f"Added task: '{new_task}'\n")
+
+
+def view_task(tasks):
+    if not tasks:
+        print("No tasks yet.\n")
+        return
+    for index, task in enumerate(tasks, start=1):
+        status = "Yes" if task["completed"] else "No"
+        print(f"{index}. {task['task']} [Completed: {status}]")
+    print()
+
+
+def complete_task(tasks):
+    if not tasks:
+        print("No tasks yet.\n")
+        return
+
+    for index, task in enumerate(tasks, start=1):
+        status = "Yes" if task["completed"] else "No"
+        print(f"{index}. {task['task']} [Completed: {status}]")
+
+    choice = input("\nWhich task number is complete? ")
+    if choice.isdigit():
+        task_index = int(choice) - 1
+        if 0 <= task_index < len(tasks):
+            tasks[task_index]["completed"] = True
+            print(f"Completed task: '{tasks[task_index]['task']}'\n")
+            saveTasks(tasks)
+        else:
+            print("Invalid task number.\n")
+    else:
+        print("Invalid input.\n")
+
+
+def delete_task(tasks):
+    if not tasks:
+        print("No tasks yet.\n")
+        return
+
+    for index, task in enumerate(tasks, start=1):
+        print(f"{index}. {task['task']}")
+
+    choice = input("\nWhich task number do you want to delete? ")
+    if choice.isdigit():
+        task_index = int(choice) - 1
+        if 0 <= task_index < len(tasks):
+            deleted = tasks.pop(task_index)
+            print(f"Deleted task: '{deleted['task']}'\n")
+            saveTasks(tasks)
+        else:
+            print("Invalid task number.\n")
+    else:
+        print("Invalid input.\n")
+
+
+def saveTasks(task_list, filename="tasks.csv"):
+    with open(filename, mode="w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Task", "Complete?"])
+        for item in task_list:
+            task_name = item.get("task", "")
+            is_done = "yes" if item.get("completed", False) else "no"
+            writer.writerow([task_name, is_done])
+    print(f"Tasks successfully written to {filename}")
+
+
+def task_manager(tasks):
+    while True:
+        print("1: Add Task")
+        print("2: View Tasks")
+        print("3: Mark As Complete")
+        print("4: Delete Task")
+        print("5: Save Tasks")
+        print("6: Exit")
+
+        choice = input("Choose a number: ")
+        match choice:
+            case "1":
+                add_task(tasks)
+            case "2":
+                view_task(tasks)
+            case "3":
+                complete_task(tasks)
+            case "4":
+                delete_task(tasks)
+            case "5":
+                saveTasks(tasks)
+            case "6":
+                print("Bye Have a nice day")
+                break
+
+Task = load_tasks()
+task_manager(Task)
