@@ -1,0 +1,20 @@
+import requests
+
+from_currency = input("Convert from USD/EUR/GBP: ").strip().upper()
+to_currency = input("Covert to USD/EUR/GBP: ").strip().upper()
+amount = float(input("Amount: "))
+
+url = "https://api.frankfurter.dev/v1/latest"
+params = {"amount": amount,
+          "from": from_currency,
+          "to": to_currency}
+
+resp = requests.get(url,params=params)
+
+if resp.status_code == 200:
+    data = resp.json()
+    converted = data["rates"][to_currency]
+    print(f"{amount} {from_currency} = {converted:.2f} {to_currency}")
+else:
+    print("Invalid Country Currency")
+
