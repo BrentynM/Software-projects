@@ -1,0 +1,22 @@
+import requests
+def get_pokemon_stats(pokemon_name):
+    
+    formatted_name = pokemon_name.strip().lower()
+    url = f"https://pokeapi.co/api/v2/pokemon/{formatted_name}"
+
+    try:
+        resp = requests.get(url)
+        resp.raise_for_status()
+        data = resp.json()
+
+        name = data["name"].capitalize()
+        poke_id = data["id"]
+        height = data["height"]/10
+        weight = data["weight"]/10
+
+        print(f"{name} --- 'id'{poke_id}")
+        print(f"'Height'{height} M & 'Weight'{weight} KG")
+    except Exception as err:
+        print(f"An error occurred: {err}")
+pokemon = input("\nEnter Pokémon name or ID (or 'q' to quit): ")
+get_pokemon_stats(pokemon)
